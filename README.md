@@ -10,6 +10,8 @@ This script uses the kitty image protocol and specifically the `icat` command. S
 you will need to have kitty installed and use this inside a terminal which supports
 the kitty image protocol.
 
+<https://github.com/user-attachments/assets/52467467-d3a5-47ec-8dfa-bf558a8e0a49>
+
 > [!WARNING]
 > This doesn't work in tmux and other tui integrated terminals yet. It might be
 > the case one day, specifically for tmux but I don't know yet. 
