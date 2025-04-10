@@ -4,7 +4,7 @@ A small script which will display the elden ring victory banner in your terminal
 The animation is meant to play when you push some code with git. However, the script
 is only visual and doesn't do anything else. So you will need to write an alias
 to run the script and then push your code. The script also plays the elden ring
-victory sound effect. 
+victory sound effect.
 
 This script uses the kitty image protocol and specifically the `icat` command. So
 you will need to have kitty installed and use this inside a terminal which supports
