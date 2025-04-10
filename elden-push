@@ -85,7 +85,7 @@ trap 'rm -f "$TMP_IMAGE"' EXIT
 
 # --- Animation Parameters ---
 FADE_STEPS=20        # Number of steps for fade-in (increased for smoother fade)
-FADE_IN_DURATION=0.3 # Total duration for fade-in in seconds (faster fade-in)
+FADE_IN_DURATION=0   # Was the duration of the fade-in animation but image rendering is too slow
 HOLD_DURATION=0.2    # How long to display the fully opaque image
 
 # Calculate delay between frames (using bc for floating point)
