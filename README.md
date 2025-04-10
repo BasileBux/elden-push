@@ -34,4 +34,4 @@ do not own the rights to any of these assets.
 
 The idea for displaying a game banner upon completing a task was inspired by the
 [Dark Souls Notifications Firefox extension](https://github.com/komlev/darksouls-notifications)
-by komlev. And some memes on twitter. 
+by komlev. And some memes on twitter.
