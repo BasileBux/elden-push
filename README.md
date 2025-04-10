@@ -24,6 +24,10 @@ which might take a bit of time. The cache is dependent on the terminal size (it
 will generate cache for every new terminal size. It is stored in the script's
 directory. You can safely delete the whole cache directory to free up space. 
 
+The timings are arbitrary and I put them how I liked them. You can easily change
+them in the script. As a matter of fact, you can change anything in the script
+it is ~160 lines so not that much to read. 
+
 ## Resources
 
 - https://rezuaq.be/new-area/image-creator/
