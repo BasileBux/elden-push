@@ -40,8 +40,7 @@ SOUND="$SCRIPT_DIR/assets/audio.mp3"
 
 # TODO: Not fully implemented yet
 if [[ -n "$TMUX" ]]; then
-    echo "Tmux is not supported yet sorry :("
-    exit 1
+    echo "Tmux is not supported yet sorry. It might work but be ugly :("
     # Inside tmux: get pane dimensions
     WIDTH=$(tmux display-message -p '#{pane_width}')
     HEIGHT=$(tmux display-message -p '#{pane_height}')
