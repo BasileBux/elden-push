@@ -1,0 +1,170 @@
+#!/bin/bash
+
+# Check for required dependencies
+if ! command -v convert &> /dev/null; then
+    echo "Error: ImageMagick (convert command) not found. Please install it." >&2
+    exit 1
+fi
+
+# Find available audio player
+AUDIO_PLAYER=""
+if command -v paplay &> /dev/null; then
+    AUDIO_PLAYER="paplay"
+elif command -v aplay &> /dev/null; then
+    AUDIO_PLAYER="aplay"
+elif command -v play &> /dev/null; then
+    AUDIO_PLAYER="play"
+elif command -v afplay &> /dev/null; then  # for macOS
+    AUDIO_PLAYER="afplay"
+fi
+
+# Function to play sound
+play_sound() {
+    local sound_file="$1"
+    if [ -n "$AUDIO_PLAYER" ] && [ -f "$sound_file" ]; then
+        case "$AUDIO_PLAYER" in
+            "paplay") paplay "$sound_file" &> /dev/null & ;;
+            "aplay")  aplay "$sound_file" &> /dev/null & ;;
+            "play")   play "$sound_file" &> /dev/null & ;;
+            "afplay") afplay "$sound_file" &> /dev/null & ;;
+        esac
+    fi
+}
+
+if ! command -v kitty &> /dev/null; then
+    echo "Error: Kitty terminal not found. Please install it." >&2
+    exit 1
+fi
+
+# Asset paths
+SCRIPT_DIR="$(dirname "$(realpath "$0")")"
+BACKGROUND="$SCRIPT_DIR/assets/background.png" # 1920 x 1080
+TEXT="$SCRIPT_DIR/assets/text.png" # 1920 x 1080
+SOUND="$SCRIPT_DIR/assets/audio.mp3" # Sound file path
+
+# Get terminal/pane size in pixels
+if [[ -n "$TMUX" ]]; then
+    # Inside tmux: get pane dimensions
+    WIDTH=$(tmux display-message -p '#{pane_width}')
+    HEIGHT=$(tmux display-message -p '#{pane_height}')
+    # Convert from cells to pixels (assuming default font size)
+    WIDTH=$((WIDTH * 10))  # Approximate character width in pixels
+    HEIGHT=$((HEIGHT * 20))  # Approximate character height in pixels
+else
+    # Not in tmux: get window size from kitty
+    size_str=$(kitty +kitten icat --print-window-size)
+    # Replace 'x' with a space so read can parse width and height
+    read -r WIDTH HEIGHT <<< "${size_str/x/ }"
+fi
+
+if [[ -z "$WIDTH" || -z "$HEIGHT" ]]; then
+    echo "Error: Could not get terminal/pane size." >&2
+    exit 1
+fi
+
+# Set up cache directory in the script's location
+CACHE_DIR="$(dirname "$(realpath "$0")")/cache"
+mkdir -p "$CACHE_DIR"
+
+# Create size-specific cache directory
+SIZE_DIR="${CACHE_DIR}/${WIDTH}x${HEIGHT}"
+
+# Create a temporary file for the combined image
+TMP_IMAGE=$(mktemp --suffix=.png)
+
+# If cached frames don't exist, we'll create them
+if [ ! -d "$SIZE_DIR" ]; then
+    echo "Generating frames..."
+    mkdir -p "$SIZE_DIR"
+    USING_CACHE=false
+else
+    USING_CACHE=true
+fi
+
+# We'll use the size-specific directory instead of a temporary one
+TMP_FRAME_DIR="$SIZE_DIR"
+
+# Only clean up the temporary image on exit, keep the cached frames
+trap 'rm -f "$TMP_IMAGE"' EXIT
+
+# --- Animation Parameters ---
+FADE_STEPS=20        # Number of steps for fade-in (increased for smoother fade)
+FADE_IN_DURATION=0.3 # Total duration for fade-in in seconds (faster fade-in)
+HOLD_DURATION=0.2    # How long to display the fully opaque image
+
+# Calculate delay between frames (using bc for floating point)
+if ! command -v bc &> /dev/null; then
+    echo "Error: 'bc' command not found. Needed for calculations." >&2
+    exit 1
+fi
+FADE_IN_DELAY=$(echo "scale=3; $FADE_IN_DURATION / $FADE_STEPS" | bc)
+
+if [ "$USING_CACHE" = false ]; then
+    # --- Generate Combined Base Image ---
+    if ! magick "$BACKGROUND" -resize "${WIDTH}x${HEIGHT}!" \( "$TEXT" -resize "${WIDTH}x${HEIGHT}" \) -gravity center -composite "$TMP_IMAGE"; then
+        echo "Error: Failed to combine images using ImageMagick." >&2
+        exit 1
+    fi
+
+    # --- Generate Fade-in Frames (including frame 0) ---
+    for i in $(seq 0 $FADE_STEPS); do
+        opacity=$(echo "scale=2; $i * 100 / $FADE_STEPS" | bc)
+        # Use -alpha set -background none before modulating alpha
+        if ! magick "$TMP_IMAGE" -alpha set -background none -channel A -evaluate multiply "$(echo "scale=2; $opacity / 100" | bc)" +channel "$TMP_FRAME_DIR/fade_in_$i.png"; then
+            echo "Error: Failed to generate fade-in frame $i." >&2
+            rm -rf "$SIZE_DIR"  # Clean up failed cache directory
+            exit 1
+        fi
+    done
+    
+    # Copy the final image to cache
+    cp "$TMP_IMAGE" "$TMP_FRAME_DIR/final.png"
+else
+    # When using cache, we still need TMP_IMAGE for the hold frame
+    cp "$TMP_FRAME_DIR/final.png" "$TMP_IMAGE"
+fi
+
+# --- Prepare for Animation ---
+# Fade-out frames are no longer generated; fade-in frames will be reused in reverse.
+rows=$(tput lines)
+rows=$((rows - 2)) # Adjust row for the bottom printf
+
+
+
+# Hide cursor and save position
+tput civis
+tput sc
+
+# Play sound when animation starts
+play_sound "$SOUND"
+
+# --- Display Fade-in Animation ---
+for i in $(seq 1 $FADE_STEPS); do
+    tput rc # Restore cursor position
+    # Clear previous frame area (important!)
+    kitty +icat --clear --transfer-mode=file --align=left --place "${WIDTH}x${HEIGHT}@0x0" > /dev/null
+    # Display the current frame
+    kitty +icat --transfer-mode=file --align=left --place "${WIDTH}x${HEIGHT}@0x0" "$TMP_FRAME_DIR/fade_in_$i.png"
+    # Execute required prints *after* displaying frame
+    printf "\033[0;0H"
+    printf "\033[${rows};1H"
+    sleep "$FADE_IN_DELAY"
+done
+
+# --- Hold Opaque Image ---
+tput rc # Restore cursor position
+# Clear previous frame area
+kitty +icat --clear --transfer-mode=file --align=left --place "${WIDTH}x${HEIGHT}@0x0" > /dev/null
+# Display the original full image
+kitty +icat --transfer-mode=file --align=left --place "${WIDTH}x${HEIGHT}@0x0" "$TMP_IMAGE"
+# Execute required prints
+printf "\033[0;0H"
+printf "\033[${rows};1H"
+sleep "$HOLD_DURATION"
+
+# Clear the image and restore cursor
+tput rc
+kitty +icat --clear --transfer-mode=file --align=left --place "${WIDTH}x${HEIGHT}@0x0" > /dev/null
+tput cnorm
+kitty +icat --clear
+
